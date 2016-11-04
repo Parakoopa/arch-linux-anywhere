@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Set the version here
 export version="arch-anywhere-2.2.3-dual.iso"
@@ -149,9 +150,6 @@ prepare_x86_64() {
 	sudo arch-chroot squashfs-root /bin/bash locale-gen
 	
 ### Copy over main arch anywhere config, installer script, and arch-wiki,  make executeable
-	sudo cp "$aa"/etc/arch-anywhere.conf "$customiso"/arch/x86_64/squashfs-root/etc/
-#	sudo cp "$aa"/etc/arch-anywhere.service "$customiso"/arch/x86_64/squashfs-root/usr/lib/systemd/system/
-#	sudo cp "$aa"/arch-anywhere-init.sh "$customiso"/arch/x86_64/squashfs-root/usr/bin/arch-anywhere-init
 	sudo cp "$aa"/arch-installer.sh "$customiso"/arch/x86_64/squashfs-root/usr/bin/arch-anywhere
 	sudo cp "$aa"/extra/{arch-wiki,fetchmirrors,sysinfo,iptest} "$customiso"/arch/x86_64/squashfs-root/usr/bin/
 	sudo chmod +x "$customiso"/arch/x86_64/squashfs-root/usr/bin/{arch-anywhere,arch-wiki,fetchmirrors,sysinfo,iptest}
@@ -159,17 +157,15 @@ prepare_x86_64() {
 
 ### Create arch-anywhere directory and lang directory copy over all lang files
 	sudo mkdir -p "$customiso"/arch/x86_64/squashfs-root/usr/share/arch-anywhere/{lang,pkg}
-	sudo cp "$aa"/lang/* "$customiso"/arch/x86_64/squashfs-root/usr/share/arch-anywhere/lang
 	sudo cp /tmp/fetchmirrors/*.pkg.tar.xz "$customiso"/arch/x86_64/squashfs-root/usr/share/arch-anywhere/pkg
 	sudo cp /tmp/arch-wiki-cli/*.pkg.tar.xz "$customiso"/arch/x86_64/squashfs-root/usr/share/arch-anywhere/pkg
 
 ### Copy over extra files (dot files, desktop configurations, help file, issue file, hostname file)
-	sudo cp "$aa"/extra/{.zshrc,.help,.dialogrc} "$customiso"/arch/x86_64/squashfs-root/root/
+	sudo cp "$aa"/extra/{.zshrc,.dialogrc} "$customiso"/arch/x86_64/squashfs-root/root/
 	sudo cp "$aa"/extra/{.bashrc,.bashrc-root,.tcshrc,.tcshrc.conf,.mkshrc} "$customiso"/arch/x86_64/squashfs-root/usr/share/arch-anywhere
 	sudo cp "$aa"/extra/.zshrc-sys "$customiso"/arch/x86_64/squashfs-root/usr/share/arch-anywhere/.zshrc
 #	sudo mkdir "$customiso"/arch/x86_64/squashfs-root/usr/share/arch-anywhere/pkg
 #	sudo mv /tmp/*.pkg.tar.xz "$customiso"/arch/x86_64/squashfs-root/usr/share/arch-anywhere/pkg
-	sudo cp -r "$aa"/extra/desktop "$customiso"/arch/x86_64/squashfs-root/usr/share/arch-anywhere/
 	sudo cp "$aa"/boot/{issue,hostname} "$customiso"/arch/x86_64/squashfs-root/etc/
 	sudo cp -r "$aa"/boot/loader/syslinux "$customiso"/arch/x86_64/squashfs-root/usr/share/arch-anywhere/
 	sudo cp "$aa"/boot/splash.png "$customiso"/arch/x86_64/squashfs-root/usr/share/arch-anywhere/syslinux
@@ -200,14 +196,12 @@ prepare_i686() {
 	sudo rm -f "$customiso"/arch/i686/squashfs-root//var/cache/pacman/pkg/*
 #	sudo cp "$aa"/etc/arch-anywhere.service "$customiso"/arch/i686/squashfs-root/etc/systemd/system/
 #	sudo cp "$aa"/arch-anywhere-init.sh "$customiso"/arch/i686/squashfs-root/usr/bin/arch-anywhere-init
-	sudo cp "$aa"/etc/arch-anywhere.conf "$customiso"/arch/i686/squashfs-root/etc/
 	sudo cp "$aa"/etc/locale.gen "$customiso"/arch/i686/squashfs-root/etc
 	sudo arch-chroot squashfs-root /bin/bash locale-gen
 	sudo cp "$aa"/etc/vconsole.conf "$customiso"/arch/i686/squashfs-root/etc
 	sudo cp "$aa"/arch-installer.sh "$customiso"/arch/i686/squashfs-root/usr/bin/arch-anywhere
 	sudo mkdir "$customiso"/arch/i686/squashfs-root/usr/share/arch-anywhere
 	sudo mkdir "$customiso"/arch/i686/squashfs-root/usr/share/arch-anywhere/{lang,pkg}
-	sudo cp "$aa"/lang/* "$customiso"/arch/i686/squashfs-root/usr/share/arch-anywhere/lang
 	sudo cp /tmp/fetchmirrors/*.pkg.tar.xz "$customiso"/arch/i686/squashfs-root/usr/share/arch-anywhere/pkg
 	sudo cp /tmp/arch-wiki-cli/*.pkg.tar.xz "$customiso"/arch/i686/squashfs-root/usr/share/arch-anywhere/pkg
 	sudo chmod +x "$customiso"/arch/i686/squashfs-root/usr/bin/arch-anywhere
@@ -221,10 +215,9 @@ prepare_i686() {
 	sudo chmod +x "$customiso"/arch/i686/squashfs-root/usr/bin/iptest
 #	sudo chmod +x "$customiso"/arch/i686/squashfs-root/usr/bin/arch-anywhere-init
 #	sudo arch-chroot "$customiso"/arch/i686/squashfs-root /bin/bash -c "systemctl enable arch-anywhere.service"
-	sudo cp "$aa"/extra/{.zshrc,.help,.dialogrc} "$customiso"/arch/i686/squashfs-root/root/
+	sudo cp "$aa"/extra/{.zshrc,.dialogrc} "$customiso"/arch/i686/squashfs-root/root/
 	sudo cp "$aa"/extra/{.bashrc,.bashrc-root,.tcshrc,.tcshrc.conf,.mkshrc} "$customiso"/arch/i686/squashfs-root/usr/share/arch-anywhere
 	sudo cp "$aa"/extra/.zshrc-sys "$customiso"/arch/i686/squashfs-root/usr/share/arch-anywhere/.zshrc
-	sudo cp -r "$aa"/extra/desktop "$customiso"/arch/i686/squashfs-root/usr/share/arch-anywhere/
 	sudo cp "$aa"/boot/issue "$customiso"/arch/i686/squashfs-root/etc/
 	sudo cp "$aa"/boot/hostname "$customiso"/arch/i686/squashfs-root/etc/
 	sudo cp -r "$aa"/boot/loader/syslinux "$customiso"/arch/i686/squashfs-root/usr/share/arch-anywhere/
