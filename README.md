@@ -1,4 +1,8 @@
-# arch-linux-anywhere
+# about this repo
+
+This is my custom version of arch-linux-anywhere. It's custom branded with love and is modified to quickly set-up machines using my own configuration. It's propably not really helpful for others, but if you have a question feel free to ask.
+
+## arch-linux-anywhere
 
 Arch Anywhere is a modified version of the official archiso providing a hassle free pure Arch Linux install from start to finish. Arch Anywhere contains a set of shell scripts intended to simplify the install process. This includes a dialog automated installer enabling you to install Arch Linux from the cli in semi graphical install mode. Simply boot up and type 'arch-anywhere' to invoke the installer script, every aspect of the install is taken into account from partitioning and general system configuration, to installing your favorite desktop/wm and additional software from the official Arch Linux repos.
 
