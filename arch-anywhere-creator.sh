@@ -2,10 +2,10 @@
 set -e
 
 # Set the version here
-export version="arch-anywhere-2.2.3-dual.iso"
+export version="arch-kokako-1.0.0-dual.iso"
 
 # Set the ISO label here
-export iso_label="aaiso2"
+export iso_label="kokako-1"
 
 # Location variables all directories must exist
 export aa="`dirname $(readlink -f "$0")`"
@@ -13,7 +13,7 @@ export customiso="$aa/customiso"
 export mntdir="$aa/mnt"
 
 # Link to the iso used to create Arch Anywhere
-export archiso_link="http://arch.localmsp.org/arch/iso/2016.09.03/archlinux-2016.09.03-dual.iso"
+export archiso_link="http://arch.localmsp.org/arch/iso/2016.09.03/archlinux-2016.11.01-dual.iso"
 
 init() {
 	
