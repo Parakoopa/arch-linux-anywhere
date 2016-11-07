@@ -1,2 +1,299 @@
 #!/bin/bash
-echo "todo :)"
+
+set -e
+
+ec() {
+        echo -e "\033[0;32m$1\033[m"
+}
+
+main() {
+        ec '
+                                   MMMMMMMMMM  MMMM                             
+                               7MM  MMMMMMMMM  MMMMM~                           
+                            ~MMMMM  MMMMMMMMM       +MMMMM                      
+                           MMMMMMMM  MMMMM     MMMMMMMMMMMMMMMMMMMMMMMN         
+                        M  MMMMMMMM  ~M   +MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM     
+                       MM  MMMMMMM     MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMN   
+                     MMMM$  MMMMM   MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM  
+                   MMMMM8         MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM8              
+                   MMM   +MMMM~   MMMMMMMMMMMMMMMMMMMMMMMMMMM        MMMMMMMM   
+               NM      MMMMMMMM:  MMMM  MM MMMMMMMMMMMMMM=     MMMMMMMMMMM      
+              MMMMM  MMMMMMMMMMM  MMMM      MMMMMMMMMMM    MMMMMMMMMMMO         
+            7MMMMMM  MMMMMMMMMMM  MMMM     MMMMMMMMMM,  ,MMMMMMMMMMM            
+             MMMMM  MMMMMMMMMMMM  MMMMMMMMMMMMMMMMM   MMMMMMMMMMMN              
+          MM        ,MMMMMMM7       MMMMMMMMMMMMMN   MMMMMMMMMMM                
+          MMMM   MMM          +MMM        ?MMMMM   MMMMMMMMMMMMM                
+         MMMMM  MMMM  MMMM  MMMMMM  MMMMMM   MMMMMMMMMMMMMMMMMMM                
+         MMMM  MMMM ,MMMMM  MMMMMMM  MMMMM7  MMMMMMMMMMMMMMMMMM                 
+              MMMM  MMMMMM  MMMMMMM          MMMMMMMMMMMMMMMMMM                 
+     MMMMMMMN                        M  +MMM MMMMMMMMMMMMMMMMM                  
+    MMMMMMMMM  MMMMMM  MMMMMMMMM  MMMMM  MMM MMMMMMMMMMMMMMMM                   
+        $MMMM  MMMMMM  MMMMMMMMM  MMMMMM  MM  MMMMMMMMMMMMMM$                   
+   7MMM+            $  MMMMMMMMM  MMMMMM      MMMMMMMMMMMMMM                    
+  MMMMMMMM= ?MMMO                             MMMMMMMMMMMMM                     
+MMMMMMMMMMM  MMMMMMM  OMMMMM       MM  MMMMMM  MMMMMMMMMMMM                     
+MMMMMMMMMMM  MMMMMMM  MMMMMM  MMMMMMM  MMMMM     MMMMMM                         
+  MMMMMMMMM  MMMMMMM  MMMMMM  MMMMMMM                                           
+   DMMMM      MMMMMN  MMMMMM? =MMMMMM                                           
+                      MMMMMMM  M                                                
+                                                                                '
+
+        ec "Welcome to the automatic setup of Arch Kokako."
+        ec ""
+        ec "Load german keys? (yz/n)"
+        read yn
+        case "$yn" in
+            z|Z|y|Y|yes|Yes|yY|Yy|yy|YY)
+                loadkeys de
+        esac
+        ec ""
+        ec "Before we begin, we need you to partition your new harddrive."
+        ec "Please partition your harddrive. You need..."
+        ec "   ... a UEFI Boot partition (/boot/efi) [512MB] [TYPE: EF]"
+        ec "   ... a Boot partition (/boot) [100MB] [TYPE: 83]"
+        ec "   ... a Main partition (Will be used via LVM) [TYPE: 8E]"
+        ec ""
+        ec "Do you want to continue? (y/n)"
+        read yn
+
+        case "$yn" in
+            y|Y|yes|Yes|yY|Yy|yy|YY)
+                partitionStart
+            ;;
+            *)
+                ec "Installation aborted."
+        esac
+}
+
+partitionStart() {
+        reset
+        lsblk
+        ec ""
+        ec "These are your block devices."
+        ec "Please choose the block device you want to partition."
+        ec "Do you need more details? (y/n)"
+        read yn
+        case "$yn" in
+            y|Y|yes|Yes|yY|Yy|yy|YY)
+                fdisk -l | less
+            ;;
+        esac
+        ec "Plese enter which block device you want to partition."
+        read blckDev
+        ec "Starting fdisk for partitioning..."
+        reset
+        ec "   ... a UEFI Boot partition (/boot/efi) [512MB] [TYPE: EF]"
+        ec "   ... a Boot partition (/boot) [100MB] [TYPE: 83]"
+        ec "   ... a Main partition (Will be used via LVM) [TYPE: 8E]"
+        ec ""
+        fdisk $blckDev
+
+        ec "Do you want to partition more devices? (y/n)"
+        read yn
+        case "$yn" in
+            y|Y|yes|Yes|yY|Yy|yy|YY)
+                partitionStart
+            ;;
+            *)
+                ec "Partitioning completed."
+                partitionEnd
+        esac
+        
+}
+
+partitionEnd() {
+        reset
+        lsblk
+        ec ""
+        ec "Which will be your /boot/efi partition?"
+        read bootEfi
+        ec ""
+        ec "Which will be your /boot partition?"
+        read boot
+        ec ""
+        ec "Which will be your main partition?"
+        read main
+
+        reset
+        lsblk
+        ec ""
+        ec "/boot/efi:  "$bootEfi
+        ec "/boot:      "$boot
+        ec "main:       "$main
+        ec ""
+        ec "Is this correct? (y/n)"
+        read yn
+        case "$yn" in
+            y|Y|yes|Yes|yY|Yy|yy|YY)
+                ec "Formatting /boot/efi as FAT32..."
+                mkfs.fat -F32 $bootEfi
+                ec "Generating keyfile"
+                dd bs=512 count=4 if=/dev/urandom of=/tmp/keyfile iflag=fullblock
+                ec "Formatting main LUKS encrypted..."
+                # Boot unlocked by passphrase and main unlocked by keyfile in encrypted boot
+                cryptsetup luksFormat $main
+                cryptsetup luksAddKey $main /tmp/keyfile
+                cryptsetup open --type luks $main lvm
+                ec "Configuring LVM volume..."
+                pvcreate /dev/mapper/lvm
+                vgcreate MainVol /dev/mapper/lvm
+                ec "-> Size for swap in GB? (8 recommended)"
+                read swapSize
+                lvcreate -L "${swapSize}"G MainVol -n swap
+                ec "-> Size for / in GB? (30 recommended)"
+                read rootSize
+                lvcreate -L "${rootSize}"G MainVol -n root
+                ec "-> /home get's rest of space"
+                lvcreate -l 100%FREE MainVol -n home
+                ec "Formatting ${rootSize}GB / as EXT4"
+                mkfs.ext4 /dev/mapper/MainVol-root
+                ec "Formatting ${swapSize}GB swap as EXT4"
+                mkswap /dev/mapper/MainVol-swap
+                ec "Formatting /home as EXT4"
+                mkfs.ext4 /dev/mapper/MainVol-home
+                ec "Mounting..."
+                mount /dev/mapper/MainVol-root /mnt
+                mkdir /mnt/home
+                mount /dev/mapper/MainVol-home /mnt/home
+                swapon /dev/mapper/MainVol-swap
+                ec "Configuring LUKS on /boot"
+                cryptsetup luksFormat $boot
+                cryptsetup luksAddKey $boot /tmp/keyfile
+                cryptsetup open $boot cryptboot
+                ec "Formatting /boot as EXT2"
+                mkfs.ext2 /dev/mapper/cryptboot
+                ec "Mounting /boot and /boot/efi..."
+                mkdir /mnt/boot
+                mount /dev/mapper/cryptboot /mnt/boot
+
+                cp /tmp/keyfile /mnt/crypto_keyfile.bin #Copy Keyfile
+                chmod 000 /mnt/crypto_keyfile.bin
+                rm /tmp/keyfile
+
+                mkdir /mnt/boot/efi
+                mount $bootEfi /mnt/boot/efi
+                ec ""
+                ec "Done!"
+                ec ""
+                ec "NEW BLOCK LIST:"                
+                ec ""
+                lsblk
+                ec ""
+                ec "You can now mount or format your own partitions. Type exit to continue."
+                bash
+                beginInstall $boot $main
+            ;;
+            *)
+                partitionEnd
+            ;;
+        esac
+}
+
+beginInstall() {
+        boot=$1
+        main=$2
+        
+        reset
+        
+        ec "What should the hostname of the new system be?"
+        read newhost
+        mkdir /mnt/etc
+        echo $newhost > /mnt/etc/hostname
+
+        ec "Fetching Mirrorlist..."
+        fetchmirrors
+
+        ec "Installing..."
+        ec ""
+        pacstrap /mnt base base-devel wpa_supplicant
+        
+        fstab $boot $main
+}
+
+fstab() {
+        boot=$1
+        main=$2
+        
+        ec "Configuring fstab and crypttab"
+        echo "cryptboot  $boot      /crypto_keyfile.bin       luks " >> /mnt/etc/crypttab
+        echo "lvm        $main      none                      luks " >> /mnt/etc/crypttab
+        genfstab -p /mnt > /mnt/etc/fstab
+
+        ec "fstab generated... editing now possibly: (ENTER)"
+        read tmp
+        vim /mnt/etc/fstab
+        
+        basicAndCryptConfig $boot $main
+}
+
+basicAndCryptConfig() {
+        boot=$1
+        main=$2
+        
+        echo LANG=de_DE.UTF-8 > /mnt/etc/locale.conf
+        echo LC_COLLATE=C >> /mnt/etc/locale.conf
+        echo LANGUAGE=de_DE >> /mnt/etc/locale.conf
+
+        echo KEYMAP=de > /mnt/etc/vconsole.conf
+        arch-chroot /mnt/ ln -s /usr/share/zoneinfo/Europe/Berlin /etc/localtime
+
+        sed -i 's!#de_DE.UTF-8 UTF-8!de_DE.UTF-8 UTF-8!' /mnt/etc/locale.gen
+        sed -i 's!#de_DE ISO-8859-1!de_DE ISO-8859-1!' /mnt/etc/locale.gen
+        sed -i 's!#de_DE@euro ISO-8859-15!de_DE@euro ISO-8859-15!' /mnt/etc/locale.gen
+        
+        arch-chroot /mnt/ locale-gen
+
+#/etc/pacman.conf
+#[multilib]
+#SigLevel = PackageRequired TrustedOnly
+#Include = /etc/pacman.d/mirrorlist
+
+        arch-chroot /mnt/ pacman -Sy
+        #echo ""
+        #echo "Please set the administrator password now."  ### After reboot
+        #passwd
+
+        bootloaderAndKernel $boot $main
+}
+
+bootloaderAndKernel() {
+        boot=$1
+        main=$2
+        arch-chroot /mnt/ pacman -S grub efibootmgr --noconfirm
+        
+        mainUUID=$(blkid "$main" -ovalue -sUUID)
+
+        sed -i 's!quiet!cryptdevice=UUID='$mainUUID':lvm!' /mnt/etc/default/grub
+        echo -e "\nGRUB_ENABLE_CRYPTODISK=y" >> /mnt/etc/default/grub
+
+        sed -i 's!filesystems!encrypt lvm2 filesystems!' /mnt/etc/mkinitcpio.conf
+        echo -e '\nFILES="/crypto_keyfile.bin"' >> /mnt/etc/mkinitcpio.conf
+
+        arch-chroot /mnt/ grub-mkconfig -o /boot/grub/grub.cfg
+        arch-chroot /mnt/ grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=boot --recheck
+        cp /mnt/boot/efi/EFI/boot/grubx64.efi /mnt/boot/efi/EFI/boot/bootx64.efi
+
+        arch-chroot /mnt/ mkinitcpio -p linux
+
+        saltstack
+}
+
+saltstack() {
+        ec "Installing Saltstack and cloning repository..."
+
+        # install saltstack and git
+        # copy git keyfile (oben!!)
+        # clone saltsack
+        # copy (oben!!) and enable install systemd job
+        doneAndReboot
+}
+
+doneAndReboot() {
+        reset
+        ec "DONE! Rebooting in 10 seconds. CTRL+C to abort. - Installation will continue after reboot."
+        sleep 10
+        reboot
+        exit
+}
+
+main
