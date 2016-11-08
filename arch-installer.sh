@@ -2,6 +2,10 @@
 
 set -e
 
+UEFI=false
+encrypt=false
+encrypt_fde=false
+
 ec() {
         echo -e "\033[0;32m$1\033[m"
 }
@@ -46,14 +50,37 @@ MMMMMMMMMMM  MMMMMMM  MMMMMM  MMMMMMM  MMMMM     MMMMMM
             z|Z|y|Y|yes|Yes|yY|Yy|yy|YY)
                 loadkeys de
         esac
+
+        ec "Do you want to partition using UEFI? (y/N)"
+        read yn
+        case "$yn" in
+            y|Y|yes|Yes|yY|Yy|yy|YY)
+                UEFI=true
+        esac
+
+        ec "Do you want encryption? (Y/n/f) [f = full disk encryption]"
+        read yn
+        case "$yn" in
+			n|N|no|No|nN|Nn|nn|NN)
+                ;;
+            f|F)
+                encrypt=true
+                encrypt_fde=true
+                ;;
+            *)
+                encrypt=true
+        esac
+
         ec ""
         ec "Before we begin, we need you to partition your new harddrive."
         ec "Please partition your harddrive. You need..."
-        ec "   ... a UEFI Boot partition (/boot/efi) [512MB] [TYPE: EF]"
+        if "$UEFI" ; then
+            ec "   ... a UEFI Boot partition (/boot/efi) [512MB] [TYPE: EF]"
+        fi
         ec "   ... a Boot partition (/boot) [100MB] [TYPE: 83]"
         ec "   ... a Main partition (Will be used via LVM) [TYPE: 8E]"
         ec ""
-        ec "Do you want to continue? (y/n)"
+        ec "Do you want to continue? (y/N)"
         read yn
 
         case "$yn" in
@@ -71,7 +98,7 @@ partitionStart() {
         ec ""
         ec "These are your block devices."
         ec "Please choose the block device you want to partition."
-        ec "Do you need more details? (y/n)"
+        ec "Do you need more details? (y/N)"
         read yn
         case "$yn" in
             y|Y|yes|Yes|yY|Yy|yy|YY)
@@ -82,13 +109,15 @@ partitionStart() {
         read blckDev
         ec "Starting fdisk for partitioning..."
         reset
-        ec "   ... a UEFI Boot partition (/boot/efi) [512MB] [TYPE: EF]"
+        if "$UEFI" ; then
+            ec "   ... a UEFI Boot partition (/boot/efi) [512MB] [TYPE: EF]"
+        fi
         ec "   ... a Boot partition (/boot) [100MB] [TYPE: 83]"
         ec "   ... a Main partition (Will be used via LVM) [TYPE: 8E]"
         ec ""
         fdisk $blckDev
 
-        ec "Do you want to partition more devices? (y/n)"
+        ec "Do you want to partition more devices? (y/N)"
         read yn
         case "$yn" in
             y|Y|yes|Yes|yY|Yy|yy|YY)
@@ -104,9 +133,11 @@ partitionStart() {
 partitionEnd() {
         reset
         lsblk
-        ec ""
-        ec "Which will be your /boot/efi partition?"
-        read bootEfi
+        if "$UEFI" ; then
+            ec ""
+            ec "Which will be your /boot/efi partition?"
+            read bootEfi
+        fi
         ec ""
         ec "Which will be your /boot partition?"
         read boot
@@ -117,26 +148,39 @@ partitionEnd() {
         reset
         lsblk
         ec ""
-        ec "/boot/efi:  "$bootEfi
+        if "$UEFI" ; then
+            ec "/boot/efi:  "$bootEfi
+        fi
         ec "/boot:      "$boot
         ec "main:       "$main
         ec ""
-        ec "Is this correct? (y/n)"
+        ec "Is this correct? (y/N)"
         read yn
         case "$yn" in
             y|Y|yes|Yes|yY|Yy|yy|YY)
-                ec "Formatting /boot/efi as FAT32..."
-                mkfs.fat -F32 $bootEfi
-                ec "Generating keyfile"
-                dd bs=512 count=4 if=/dev/urandom of=/tmp/keyfile iflag=fullblock
-                ec "Formatting main LUKS encrypted..."
-                # Boot unlocked by passphrase and main unlocked by keyfile in encrypted boot
-                cryptsetup luksFormat $main
-                cryptsetup luksAddKey $main /tmp/keyfile
-                cryptsetup open --type luks $main lvm
+                if "$UEFI" ; then
+                    ec "Formatting /boot/efi as FAT32..."
+                    mkfs.fat -F32 $bootEfi
+                fi
+                if "$encrypt"; then
+                    if "$encrypt_fde"; then
+                        # Boot unlocked by passphrase and both unlocked by keyfile in encrypted boot
+                        ec "Generating keyfile"
+                        dd bs=512 count=4 if=/dev/urandom of=/tmp/keyfile iflag=fullblock
+                    fi
+                    ec "Formatting main LUKS encrypted..."
+                    cryptsetup luksFormat $main
+                    if "$encrypt_fde"; then
+                        cryptsetup luksAddKey $main /tmp/keyfile
+                    fi
+                    cryptsetup open --type luks $main lvm
+                    lvmTarget="/dev/mapper/lvm"
+                else
+                    lvmTarget=$main
+                fi
                 ec "Configuring LVM volume..."
-                pvcreate /dev/mapper/lvm
-                vgcreate MainVol /dev/mapper/lvm
+                pvcreate $lvmTarget
+                vgcreate MainVol $lvmTarget
                 ec "-> Size for swap in GB? (8 recommended)"
                 read swapSize
                 lvcreate -L "${swapSize}"G MainVol -n swap
@@ -156,22 +200,35 @@ partitionEnd() {
                 mkdir /mnt/home
                 mount /dev/mapper/MainVol-home /mnt/home
                 swapon /dev/mapper/MainVol-swap
-                ec "Configuring LUKS on /boot"
-                cryptsetup luksFormat $boot
-                cryptsetup luksAddKey $boot /tmp/keyfile
-                cryptsetup open $boot cryptboot
+
+                bootTarget=$boot
+                if "$encrypt"; then
+                    if "$encrypt_fde"; then
+                        ec "Configuring LUKS on /boot"
+                        cryptsetup luksFormat $boot
+                        cryptsetup luksAddKey $boot /tmp/keyfile
+                        cryptsetup open $boot cryptboot
+                        bootTarget=/dev/mapper/cryptboot
+                    fi
+                fi
                 ec "Formatting /boot as EXT2"
-                mkfs.ext2 /dev/mapper/cryptboot
+                mkfs.ext2 $bootTarget
                 ec "Mounting /boot and /boot/efi..."
                 mkdir /mnt/boot
-                mount /dev/mapper/cryptboot /mnt/boot
+                mount $bootTarget /mnt/boot
 
-                cp /tmp/keyfile /mnt/crypto_keyfile.bin #Copy Keyfile
-                chmod 000 /mnt/crypto_keyfile.bin
-                rm /tmp/keyfile
+                if "$encrypt"; then
+                    if "$encrypt_fde"; then
+                        cp /tmp/keyfile /mnt/crypto_keyfile.bin #Copy Keyfile
+                        chmod 000 /mnt/crypto_keyfile.bin
+                        rm /tmp/keyfile
+                    fi
+                fi
 
-                mkdir /mnt/boot/efi
-                mount $bootEfi /mnt/boot/efi
+                if "$UEFI" ; then
+                    mkdir /mnt/boot/efi
+                    mount $bootEfi /mnt/boot/efi
+                fi
                 ec ""
                 ec "Done!"
                 ec ""
@@ -181,7 +238,7 @@ partitionEnd() {
                 ec ""
                 ec "You can now mount or format your own partitions. Type exit to continue."
                 bash
-                beginInstall $boot $main
+                beginInstall
             ;;
             *)
                 partitionEnd
@@ -189,10 +246,7 @@ partitionEnd() {
         esac
 }
 
-beginInstall() {
-        boot=$1
-        main=$2
-        
+beginInstall() {        
         reset
         
         ec "What should the hostname of the new system be?"
@@ -207,29 +261,27 @@ beginInstall() {
         ec ""
         pacstrap /mnt base base-devel wpa_supplicant
         
-        fstab $boot $main
+        fstab
 }
 
-fstab() {
-        boot=$1
-        main=$2
-        
+fstab() {        
         ec "Configuring fstab and crypttab"
-        echo "cryptboot  $boot      /crypto_keyfile.bin       luks " >> /mnt/etc/crypttab
-        echo "lvm        $main      none                      luks " >> /mnt/etc/crypttab
+        if "$encrypt"; then
+            if "$encrypt_fde"; then
+                echo "cryptboot  $boot      /crypto_keyfile.bin       luks " >> /mnt/etc/crypttab
+            fi
+            echo "lvm        $main      none                      luks " >> /mnt/etc/crypttab
+        fi
         genfstab -p /mnt > /mnt/etc/fstab
 
         ec "fstab generated... editing now possibly: (ENTER)"
         read tmp
         vim /mnt/etc/fstab
         
-        basicAndCryptConfig $boot $main
+        basicAndCryptConfig
 }
 
 basicAndCryptConfig() {
-        boot=$1
-        main=$2
-        
         echo LANG=de_DE.UTF-8 > /mnt/etc/locale.conf
         echo LC_COLLATE=C >> /mnt/etc/locale.conf
         echo LANGUAGE=de_DE >> /mnt/etc/locale.conf
@@ -253,25 +305,38 @@ basicAndCryptConfig() {
         #echo "Please set the administrator password now."  ### After reboot
         #passwd
 
-        bootloaderAndKernel $boot $main
+        bootloaderAndKernel
 }
 
 bootloaderAndKernel() {
-        boot=$1
-        main=$2
-        arch-chroot /mnt/ pacman -S grub efibootmgr --noconfirm
+        if "$UEFI" ; then
+            arch-chroot /mnt/ pacman -S grub efibootmgr --noconfirm
+        else
+            arch-chroot /mnt/ pacman -S grub --noconfirm
+        fi
         
         mainUUID=$(blkid "$main" -ovalue -sUUID)
 
-        sed -i 's!quiet!cryptdevice=UUID='$mainUUID':lvm!' /mnt/etc/default/grub
-        echo -e "\nGRUB_ENABLE_CRYPTODISK=y" >> /mnt/etc/default/grub
 
-        sed -i 's!filesystems!encrypt lvm2 filesystems!' /mnt/etc/mkinitcpio.conf
-        echo -e '\nFILES="/crypto_keyfile.bin"' >> /mnt/etc/mkinitcpio.conf
+        if "$encrypt"; then
+            if "$encrypt_fde"; then
+                echo -e "\nGRUB_ENABLE_CRYPTODISK=y" >> /mnt/etc/default/grub
+                echo -e '\nFILES="/crypto_keyfile.bin"' >> /mnt/etc/mkinitcpio.conf
+            fi
+            sed -i 's!quiet!cryptdevice=UUID='$mainUUID':lvm!' /mnt/etc/default/grub
+            sed -i 's!filesystems!encrypt lvm2 filesystems!' /mnt/etc/mkinitcpio.conf
+        fi
 
         arch-chroot /mnt/ grub-mkconfig -o /boot/grub/grub.cfg
-        arch-chroot /mnt/ grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=boot --recheck
-        cp /mnt/boot/efi/EFI/boot/grubx64.efi /mnt/boot/efi/EFI/boot/bootx64.efi
+
+        if "$UEFI" ; then
+            arch-chroot /mnt/ grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=boot --recheck
+            cp /mnt/boot/efi/EFI/boot/grubx64.efi /mnt/boot/efi/EFI/boot/bootx64.efi
+        else
+            ec "Which device should the bootloader be installed to?"
+            read $bootloaderDevice
+            arch-chroot /mnt/ grub-install $bootloaderDevice
+        fi
 
         arch-chroot /mnt/ mkinitcpio -p linux
 
