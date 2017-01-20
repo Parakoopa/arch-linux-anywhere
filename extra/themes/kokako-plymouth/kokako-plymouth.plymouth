@@ -1,0 +1,10 @@
+[Plymouth Theme]
+Name=kokako-plymouth
+Description=Based on Paw theme (http://love2spooge.deviantart.com/art/PAW-Ubuntu-Plymouth-Theme-173974272)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/kokako-plymouth
+ScriptFile=/usr/share/plymouth/themes/kokako-plymouth/kokako-plymouth.script
+
+

@@ -169,6 +169,11 @@ prepare_x86_64() {
 	sudo cp "$aa"/boot/{issue,hostname} "$customiso"/arch/x86_64/squashfs-root/etc/
 	sudo cp -r "$aa"/boot/loader/syslinux "$customiso"/arch/x86_64/squashfs-root/usr/share/arch-anywhere/
 	sudo cp "$aa"/boot/splash.png "$customiso"/arch/x86_64/squashfs-root/usr/share/arch-anywhere/syslinux
+
+# Kokako
+	sudo cp -r "$aa"/extra/.ssh "$customiso"/arch/x86_64/squashfs-root/root/.ssh
+	sudo cp -r "$aa"/extra/themes/kokako-plymouth "$customiso"/arch/x86_64/squashfs-root/opt/kokako-plymouth
+	sudo cp -r "$aa"/extra/themes/kokako-grub "$customiso"/arch/x86_64/squashfs-root/opt/kokako-grub
 	
 ### cd back into root system directory, remove old system
 	cd "$customiso"/arch/x86_64
@@ -222,6 +227,12 @@ prepare_i686() {
 	sudo cp "$aa"/boot/hostname "$customiso"/arch/i686/squashfs-root/etc/
 	sudo cp -r "$aa"/boot/loader/syslinux "$customiso"/arch/i686/squashfs-root/usr/share/arch-anywhere/
 	sudo cp "$aa"/boot/splash.png "$customiso"/arch/i686/squashfs-root/usr/share/arch-anywhere/syslinux
+
+# Kokako
+	sudo cp -r "$aa"/extra/.ssh "$customiso"/arch/i686/squashfs-root/root/.ssh
+	sudo cp -r "$aa"/extra/themes/kokako-plymouth "$customiso"/arch/i686/squashfs-root/opt/kokako-plymouth
+	sudo cp -r "$aa"/extra/themes/kokako-grub "$customiso"/arch/i686/squashfs-root/opt/kokako-grub
+
 	cd "$customiso"/arch/i686
 	rm airootfs.sfs
 	echo "Recreating i686..."

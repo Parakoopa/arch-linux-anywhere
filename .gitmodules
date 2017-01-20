@@ -1,0 +1,3 @@
+[submodule "extra/themes/kokako-grub"]
+	path = extra/themes/kokako-grub
+	url = https://github.com/Parakoopa/arch-silence-custom

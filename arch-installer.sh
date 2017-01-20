@@ -259,6 +259,8 @@ beginInstall() {
 
         ec "Installing..."
         ec ""
+
+        pacman -Sy archlinux-keyring --noconfirm
         pacstrap /mnt base base-devel wpa_supplicant
         
         fstab
@@ -287,24 +289,44 @@ basicAndCryptConfig() {
         echo LANGUAGE=de_DE >> /mnt/etc/locale.conf
 
         echo KEYMAP=de > /mnt/etc/vconsole.conf
+        rm /mnt/etc/localtime || true
         arch-chroot /mnt/ ln -s /usr/share/zoneinfo/Europe/Berlin /etc/localtime
+
+        ## Own PPA
+        echo "
+[para-ppa]
+Server = https://parakoopa.de/pkgs
+SigLevel = Required TrustedOnly" >> /mnt/etc/pacman.conf
+
+        arch-chroot /mnt/ pacman-key -r 1CDE33BB
+        arch-chroot /mnt/ pacman-key --lsign-key 1CDE33BB
 
         sed -i 's!#de_DE.UTF-8 UTF-8!de_DE.UTF-8 UTF-8!' /mnt/etc/locale.gen
         sed -i 's!#de_DE ISO-8859-1!de_DE ISO-8859-1!' /mnt/etc/locale.gen
         sed -i 's!#de_DE@euro ISO-8859-15!de_DE@euro ISO-8859-15!' /mnt/etc/locale.gen
         
         arch-chroot /mnt/ locale-gen
-
-#/etc/pacman.conf
-#[multilib]
-#SigLevel = PackageRequired TrustedOnly
-#Include = /etc/pacman.d/mirrorlist
-
         arch-chroot /mnt/ pacman -Sy
-        #echo ""
-        #echo "Please set the administrator password now."  ### After reboot
-        #passwd
+        ec ""
+        ec "Please set the administrator password now."
+        arch-chroot /mnt/ passwd
 
+        arch-chroot /mnt/ pacman -S git openssh --noconfirm
+
+        grubThemeAndPlymouth
+}
+
+grubThemeAndPlymouth() {
+        # Install Plymouth and Themes
+        arch-chroot /mnt/ pacman -S docbook-xsl pango ttf-dejavu plymouth-git --noconfirm
+        cp -r /opt/kokako-plymouth /mnt/usr/share/plymouth/themes/kokako-plymouth
+        arch-chroot /mnt/ plymouth-set-default-theme kokako-plymouth
+        sed -i 's!base udev!base udev plymouth!' /mnt/etc/mkinitcpio.conf
+        sed -i 's!MODULES="!MODULES="i915 !' /mnt/etc/mkinitcpio.conf
+        
+        # Install Grub Theme
+        mkdir -p /mnt/boot/grub/themes
+        cp -r /opt/kokako-grub/theme /mnt/boot/grub/themes/kokako-grub
         bootloaderAndKernel
 }
 
@@ -323,9 +345,13 @@ bootloaderAndKernel() {
                 echo -e "\nGRUB_ENABLE_CRYPTODISK=y" >> /mnt/etc/default/grub
                 echo -e '\nFILES="/crypto_keyfile.bin"' >> /mnt/etc/mkinitcpio.conf
             fi
-            sed -i 's!quiet!cryptdevice=UUID='$mainUUID':lvm!' /mnt/etc/default/grub
-            sed -i 's!filesystems!encrypt lvm2 filesystems!' /mnt/etc/mkinitcpio.conf
+            sed -i 's!quiet! quiet loglevel=3 rd.systemd.show_status=auto rd.udev.log-priority=3 splash cryptdevice=UUID='$mainUUID':lvm!' /mnt/etc/default/grub
+            sed -i 's!block!plymouth-encrypt lvm2 block!' /mnt/etc/mkinitcpio.conf
+        else
+            sed -i 's!quiet! quiet loglevel=3 rd.systemd.show_status=auto rd.udev.log-priority=3 splash!' /mnt/etc/default/grub
+            sed -i 's!block!lvm2 block!' /mnt/etc/mkinitcpio.conf
         fi
+        echo -e '\nGRUB_THEME="/boot/grub/themes/kokako-grub/theme.txt"' >> /mnt/etc/default/grub
 
         arch-chroot /mnt/ grub-mkconfig -o /boot/grub/grub.cfg
 
@@ -338,6 +364,9 @@ bootloaderAndKernel() {
             arch-chroot /mnt/ grub-install $bootloaderDevice
         fi
 
+        # Somehow this might not get created
+        cp /etc/os-release /mnt/etc/os-release
+
         arch-chroot /mnt/ mkinitcpio -p linux
 
         saltstack
@@ -347,9 +376,25 @@ saltstack() {
         ec "Installing Saltstack and cloning repository..."
 
         # install saltstack and git
-        # copy git keyfile (oben!!)
-        # clone saltsack
-        # copy (oben!!) and enable install systemd job
+        arch-chroot /mnt/ pacman -S salt wget --noconfirm
+        
+        # copy ssh key
+        cp -r ./.ssh /mnt/root/.ssh
+
+        # clone saltsack configuration
+        arch-chroot /mnt/ git clone gitolite@parakoopa.de:saltstack /srv/salt
+        #arch-chroot /mnt/ git config --global user.email parakoopa@live.de
+        #arch-chroot /mnt/ git config --global user.name Kokako installer
+        # configure master-less minion setup
+        rm /mnt/etc/salt/minion || true
+        arch-chroot /mnt/ ln -s /srv/salt/config/minion /etc/salt/minion
+        # DO NOT: arch-chroot /mnt/ systemctl enable salt-minion - @see https://docs.saltstack.com/en/latest/topics/tutorials/quickstart.html
+
+        # copy and enable install systemd job
+        cp /mnt/srv/salt/installer/saltstack-kokako-install.service /mnt/etc/systemd/system/saltstack-kokako-install.service
+        arch-chroot /mnt/ systemctl disable getty@tty1.service
+        arch-chroot /mnt/ systemctl enable saltstack-kokako-install
+
         doneAndReboot
 }
 
