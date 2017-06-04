@@ -292,8 +292,11 @@ basicAndCryptConfig() {
         rm /mnt/etc/localtime || true
         arch-chroot /mnt/ ln -s /usr/share/zoneinfo/Europe/Berlin /etc/localtime
 
-        ## Own PPA
+        ## Own PPA & Multilib
         echo "
+[multilib]
+Include = /etc/pacman.d/mirrorlist
+
 [para-ppa]
 Server = https://parakoopa.de/pkgs
 SigLevel = Required TrustedOnly" >> /mnt/etc/pacman.conf
@@ -382,7 +385,7 @@ saltstack() {
         cp -r ./.ssh /mnt/root/.ssh
 
         # clone saltsack configuration
-        arch-chroot /mnt/ git clone gitolite@parakoopa.de:saltstack /srv/salt
+        arch-chroot /mnt/ git clone git@github.com:Parakoopa/saltstack.git /srv/salt
         #arch-chroot /mnt/ git config --global user.email parakoopa@live.de
         #arch-chroot /mnt/ git config --global user.name Kokako installer
         # configure master-less minion setup
